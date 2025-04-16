@@ -1,20 +1,25 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
+import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
+struct NetworkConfig {
+    address priceFeed; // ETH/USD price feed address;
+}
 
-contract HelperConfig {
+contract HelperConfig is Script {
     NetworkConfig public activeNetworkConfig;
-
-    struct NetworkConfig {
-        address priceFeed;
-    }
+    uint8 public constant DECIMALS = 8;
+    int256 public constant INITIAL_PRICE = 2000e18;
 
     constructor() {
         if (block.chainid == 11155111) {
             activeNetworkConfig = getSepoliaEthConfig();
+        } else if (block.chainid == 1) {
+            activeNetworkConfig = getMainnetEthConfig();
         } else {
-            activeNetworkConfig = getAnvilEthConfig();
+            activeNetworkConfig = getOrCreateAnvilEthConfig();
         }
     }
 
@@ -22,9 +27,28 @@ contract HelperConfig {
         NetworkConfig memory sepoliaConfig = NetworkConfig({
             priceFeed: 0x694AA1769357215DE4FAC081bf1f309aDC325306
         });
-
-        // prce feed address
+        return sepoliaConfig;
     }
 
-    function getAnvilEthConfig() public pure returns (NetworkConfig memory) {}
+    function getMainnetEthConfig() public pure returns (NetworkConfig memory) {
+        NetworkConfig memory mainnetConfig = NetworkConfig({
+            priceFeed: 0x5424384B256154046E9667dDFaaa5e550145215e
+        });
+        return mainnetConfig;
+    }
+
+    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
+        if (activeNetworkConfig.priceFeed != address(0)) {
+            return activeNetworkConfig;
+        }
+        vm.startBroadcast();
+        MockV3Aggregator mockV3Aggregatornew;
+        mockV3Aggregatornew = new MockV3Aggregator(DECIMALS, INITIAL_PRICE);
+        vm.stopBroadcast();
+
+        NetworkConfig memory anvilConfig = NetworkConfig({
+            priceFeed: address(mockV3Aggregatornew)
+        });
+        return anvilConfig;
+    }
 }
